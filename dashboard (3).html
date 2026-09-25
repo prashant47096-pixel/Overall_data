@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Orbis Performance Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0B0E17; --bg2:#0F1424; --panel:#151B2C; --panel2:#1B2338; --line:#2A3350;
+  --ink:#F3F5FA; --sub:#95A0BD; --faint:#5E6987;
+  --gold:#FFC145; --gold-d:#B9862A; --coral:#FF6B6B; --teal:#2EC4B6; --violet:#9B6BFF;
+  --sky:#3FC1E9; --pink:#FF6FB5; --lime:#8CD867; --amber:#F4A259;
+  --blue:#5A8FC7; --green:#2ED9A3; --red:#FF5D6C;
+  --radius:12px;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){ }
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:radial-gradient(1200px 700px at 10% -10%,#1A2340 0%,var(--bg) 45%) fixed,var(--bg);color:var(--ink);
+  font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+body{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);}
+h1,h2,h3,.disp{font-family:'Manrope',system-ui,sans-serif;}
+::-webkit-scrollbar{height:8px;width:8px}
+::-webkit-scrollbar-thumb{background:#2E3746;border-radius:8px}
+
+.wrap{max-width:1400px;margin:0 auto;padding:20px 24px 60px;}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:18px 0 20px;border-bottom:1px solid var(--line);flex-wrap:wrap;}
+.brand{display:flex;align-items:center;gap:12px;}
+.brand .mark{width:38px;height:38px;border-radius:10px;background:linear-gradient(155deg,var(--teal),var(--violet));
+  box-shadow:0 4px 16px -2px rgba(155,107,255,.45);
+  display:flex;align-items:center;justify-content:center;font-family:'Manrope';font-weight:800;color:#171008;font-size:16px;}
+.brand h1{font-size:17px;font-weight:700;margin:0;letter-spacing:.2px;}
+.brand p{margin:1px 0 0;font-size:12px;color:var(--sub);}
+.actions{display:flex;gap:8px;flex-wrap:wrap;}
+button{font-family:'Inter';cursor:pointer;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel2);color:var(--ink);padding:9px 14px;font-size:13px;font-weight:600;
+  transition:border-color .15s, background .15s;}
+button:hover{border-color:var(--faint);}
+button.primary{background:linear-gradient(120deg,var(--gold),var(--coral));border-color:transparent;color:#1A0F04;box-shadow:0 4px 14px -3px rgba(255,107,107,.4);}
+button.primary:hover{filter:brightness(1.08);}
+button.ghost{background:transparent;}
+button:disabled{opacity:.4;cursor:not-allowed;}
+input[type=file]{display:none;}
+
+.status{margin-top:14px;font-size:13px;padding:10px 14px;border-radius:8px;display:none;gap:8px;align-items:flex-start;}
+.status.show{display:flex;}
+.status.ok{background:rgba(79,174,129,.1);color:var(--green);border:1px solid rgba(79,174,129,.3);}
+.status.err{background:rgba(224,104,90,.1);color:var(--red);border:1px solid rgba(224,104,90,.3);}
+
+.filters{margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;}
+.f-field{display:flex;flex-direction:column;gap:5px;min-width:150px;flex:1;}
+.f-field label{font-size:11px;color:var(--sub);font-weight:600;text-transform:uppercase;letter-spacing:.4px;}
+.f-field select,.f-field input{background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+  border-radius:7px;padding:8px 9px;font-size:13px;font-family:'Inter';width:100%;}
+.f-field select:focus,.f-field input:focus{outline:none;border-color:var(--gold);}
+.f-btns{display:flex;gap:8px;}
+
+.empty{margin-top:60px;text-align:center;color:var(--sub);padding:60px 20px;border:1px dashed var(--line);border-radius:var(--radius);}
+.empty h2{color:var(--ink);font-size:20px;margin-bottom:8px;}
+.empty p{font-size:13px;max-width:420px;margin:0 auto;}
+
+.kpis{margin-top:22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px 14px;position:relative;overflow:hidden;
+  border-top:3px solid var(--kc,var(--gold));transition:transform .15s;}
+.kpi:hover{transform:translateY(-2px);}
+.kpi .lbl{font-size:11px;color:var(--sub);font-weight:600;text-transform:uppercase;letter-spacing:.4px;
+  display:flex;align-items:center;gap:5px;}
+.kpi .lbl .q{width:14px;height:14px;border-radius:50%;background:var(--panel2);color:var(--faint);
+  font-size:10px;display:inline-flex;align-items:center;justify-content:center;cursor:help;flex-shrink:0;}
+.kpi .lbl .q:hover{color:var(--gold);}
+.kpi .val{font-family:'Manrope';font-size:22px;font-weight:800;margin-top:6px;color:var(--kc,var(--ink));}
+.kpi .trend{font-size:11px;margin-top:5px;color:var(--sub);}
+.kpi .trend.up{color:var(--green);} .kpi .trend.down{color:var(--red);}
+.kpi[title]{}
+
+.tabs{margin-top:26px;display:flex;gap:4px;border-bottom:1px solid var(--line);}
+.tab{padding:10px 16px;font-size:13px;font-weight:600;color:var(--sub);cursor:pointer;
+  border-bottom:2px solid transparent;user-select:none;}
+.tab.active{color:var(--ink);border-image:linear-gradient(90deg,var(--gold),var(--coral)) 1;}
+.view{display:none;margin-top:20px;}
+.view.active{display:block;}
+
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+@media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr;}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;
+  border-top:3px solid var(--kc,var(--line));}
+.card h3{font-size:13px;margin:0 0 12px;font-weight:700;color:var(--ink);}
+.card .sub{font-size:11px;color:var(--sub);margin:-8px 0 12px;}
+.chartbox{position:relative;height:260px;}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.tablewrap{overflow-x:auto;}
+th{text-align:left;color:var(--sub);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.3px;
+  padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;}
+th:hover{color:var(--gold);}
+td{padding:9px 10px;border-bottom:1px solid #202836;white-space:nowrap;color:var(--ink);}
+tr:hover td{background:var(--panel2);}
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:600;
+  background:var(--panel2);color:var(--sub);border:1px solid var(--line);}
+
+.foot-note{margin-top:26px;font-size:11.5px;color:var(--faint);line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="mark">TR</div>
+      <div>
+        <h1>Orbis Performance Console</h1>
+        <p>Premium marketing performance dashboard</p>
+      </div>
+    </div>
+    <div class="actions">
+      <input type="file" id="fileInput" accept=".xlsx,.csv">
+      <button class="primary" onclick="document.getElementById('fileInput').click()">Upload File</button>
+      <button class="ghost" id="btnRefresh" onclick="refreshData()" disabled>Refresh Data</button>
+      <button class="ghost" id="btnReset" onclick="resetDashboard()" disabled>Reset Dashboard</button>
+      <button class="ghost" id="btnDelete" onclick="deleteData()" disabled>Delete Data</button>
+    </div>
+  </header>
+
+  <div class="status" id="statusBox"></div>
+
+  <div class="filters" id="filterBar" style="display:none;">
+    <div class="f-field"><label>Start Date</label><input type="date" id="fStart"></div>
+    <div class="f-field"><label>End Date</label><input type="date" id="fEnd"></div>
+    <div class="f-field"><label>Module ID</label><select id="fModule"><option value="">All</option></select></div>
+    <div class="f-field"><label>Campaign</label><select id="fCampaign"><option value="">All</option></select></div>
+    <div class="f-field"><label>Audience</label><select id="fAudience"><option value="">All</option></select></div>
+    <div class="f-field"><label>Creative</label><select id="fCreative"><option value="">All</option></select></div>
+    <div class="f-field" id="platformFieldWrap" style="display:none;"><label>Platform</label><select id="fPlatform"><option value="">All</option></select></div>
+    <div class="f-btns">
+      <button class="primary" onclick="applyFilters()">Apply Filters</button>
+      <button class="ghost" onclick="clearFilters()">Clear Filters</button>
+    </div>
+  </div>
+
+  <div class="empty" id="emptyState">
+    <h2>No data loaded</h2>
+    <p>Upload the Tata Realty performance export (.xlsx or .csv) to populate the console. Required columns: Day, Impressions, Amount spent, Clicks (all), Leads.</p>
+  </div>
+
+  <div id="dashArea" style="display:none;">
+    <div class="kpis" id="kpiGrid"></div>
+
+    <div class="tabs">
+      <div class="tab active" data-view="overview">Overall Performance</div>
+      <div class="tab" data-view="audience">Audience-wise Breakdown</div>
+      <div class="tab" data-view="creative">Creative-wise Breakdown</div>
+      <div class="tab" data-view="datewise">Date-wise Breakdown</div>
+    </div>
+
+    <div class="view active" id="view-overview">
+      <div class="grid2">
+        <div class="card" style="--kc:var(--teal)"><h3>Spend &amp; Leads Over Time</h3><div class="sub">Daily amount spent vs platform leads</div>
+          <div class="chartbox"><canvas id="chOverTime"></canvas></div></div>
+        <div class="card" style="--kc:var(--violet)"><h3>Audience Mix</h3><div class="sub">Share of leads by audience</div>
+          <div class="chartbox"><canvas id="chAudience"></canvas></div></div>
+      </div>
+      <div class="grid3" style="margin-top:14px;">
+        <div class="card" style="--kc:var(--coral)"><h3>Top Campaigns by Spend</h3><div class="chartbox" style="height:220px;"><canvas id="chTopCampaigns"></canvas></div></div>
+        <div class="card" style="--kc:var(--sky)"><h3>Creative Performance</h3><div class="chartbox" style="height:220px;"><canvas id="chCreative"></canvas></div></div>
+        <div class="card" style="--kc:var(--amber)"><h3>CPL by Module</h3><div class="chartbox" style="height:220px;"><canvas id="chModule"></canvas></div></div>
+      </div>
+    </div>
+
+    <div class="view" id="view-audience">
+      <div class="card" style="--kc:var(--violet)">
+        <h3>Audience-wise Detail</h3><div class="sub">Click a column header to sort. All figures reflect active filters.</div>
+        <div class="tablewrap"><table id="audienceTable">
+          <thead><tr>
+            <th data-k="label">Audience</th><th data-k="impressions">Impr.</th>
+            <th data-k="reach">Reach</th><th data-k="clicks">Clicks</th><th data-k="spend">Spend (₹)</th>
+            <th data-k="leads">Leads</th><th data-k="cpl">CPL</th><th data-k="ctr">CTR%</th><th data-k="cpm">CPM</th>
+          </tr></thead><tbody></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <div class="view" id="view-creative">
+      <div class="card" style="--kc:var(--sky)">
+        <h3>Creative-wise Detail</h3><div class="sub">Click a column header to sort. All figures reflect active filters.</div>
+        <div class="tablewrap"><table id="creativeTable">
+          <thead><tr>
+            <th data-k="label">Creative</th><th data-k="impressions">Impr.</th>
+            <th data-k="reach">Reach</th><th data-k="clicks">Clicks</th><th data-k="spend">Spend (₹)</th>
+            <th data-k="leads">Leads</th><th data-k="cpl">CPL</th><th data-k="ctr">CTR%</th><th data-k="cpm">CPM</th>
+          </tr></thead><tbody></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <div class="view" id="view-datewise">
+      <div class="card" style="--kc:var(--lime)">
+        <h3>Date-wise Detail</h3><div class="sub">Click a column header to sort. All figures reflect active filters.</div>
+        <div class="tablewrap"><table id="datewiseTable">
+          <thead><tr>
+            <th data-k="label">Date</th><th data-k="impressions">Impr.</th>
+            <th data-k="reach">Reach</th><th data-k="clicks">Clicks</th><th data-k="spend">Spend (₹)</th>
+            <th data-k="leads">Leads</th><th data-k="cpl">CPL</th><th data-k="ctr">CTR%</th><th data-k="cpm">CPM</th>
+          </tr></thead><tbody></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot-note" id="footNote"></div>
+</div>
+
+<script>
+let RAW=[], FILTERED=[], COLMAP={}, sortState={k:'spend',dir:-1};
+const REQUIRED = ['date','impressions','spend','clicks','leads'];
+const ALIASES = {
+  date:['day','date','reporting starts'], campaign:['campaign name','campaign'],
+  moduleId:['module id','moduleid'], audience:['audience'], creative:['creative'],
+  platform:['platform'], executive:['executive name'],
+  impressions:['impressions'], reach:['reach'],
+  spend:['amount spent (inr)','amount spent','spend'],
+  clicks:['clicks (all)','clicks'], leads:['leads','platform leads'],
+  postEng:['post engagements','postengagements']
+};
+const charts = {};
+
+function showStatus(msg, ok){
+  const b = document.getElementById('statusBox');
+  b.className = 'status show ' + (ok?'ok':'err');
+  b.innerHTML = (ok? '&#10003; ' : '&#9888; ') + msg;
+}
+
+function normHeader(h){ return String(h||'').trim().toLowerCase(); }
+
+function buildColMap(headers){
+  const map = {}; const normed = headers.map(normHeader);
+  for(const key in ALIASES){
+    for(const alias of ALIASES[key]){
+      const idx = normed.indexOf(alias);
+      if(idx>-1){ map[key]=headers[idx]; break; }
+    }
+  }
+  return map;
+}
+
+function parseDate(v){
+  if(v instanceof Date && !isNaN(v)) return v;
+  if(typeof v === 'number'){ const d=new Date(Math.round((v-25569)*86400*1000)); return isNaN(d)?null:d; }
+  if(typeof v === 'string'){
+    const s = v.trim();
+    let m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+    if(m){ let [,,a,b,y]=[null,...m]; if(y.length===2) y='20'+y;
+      // ambiguous dd-mm vs mm-dd: assume dd-mm-yyyy (data uses this pattern)
+      const d = new Date(+y, +b-1, +a); if(!isNaN(d)) return d; }
+    const d2 = new Date(s); if(!isNaN(d2)) return d2;
+  }
+  return null;
+}
+function num(v){ const n = parseFloat(v); return isNaN(n)?0:n; }
+function fmtInt(n){ return Math.round(n).toLocaleString('en-IN'); }
+function fmtMoney(n){ return isFinite(n)? '₹'+n.toLocaleString('en-IN',{maximumFractionDigits:2}) : '—'; }
+function fmtNum(n,d){ return isFinite(n)? n.toLocaleString('en-IN',{maximumFractionDigits:d??2}) : '—'; }
+function safeDiv(a,b){ return b>0 ? a/b : NaN; }
+
+function handleFile(file){
+  const name = file.name.toLowerCase();
+  if(name.endsWith('.csv')){
+    Papa.parse(file, {complete: r=> processRows(r.data), error: e=> showStatus('Could not read CSV: '+e.message,false)});
+  } else {
+    const reader = new FileReader();
+    reader.onload = e=>{
+      let rows;
+      try{
+        const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+      }catch(err){ showStatus('Could not read Excel file: '+err.message,false); return; }
+      processRows(rows);
+    };
+    reader.onerror = ()=> showStatus('Failed to load file.',false);
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+function processRows(rows){
+  rows = rows.filter(r=>r && r.length && r.some(c=>c!==null && c!==''));
+  if(rows.length<2){ showStatus('File appears empty or unreadable.',false); return; }
+  const headers = rows[0].map(h=>String(h||'').trim());
+  COLMAP = buildColMap(headers);
+  const missing = REQUIRED.filter(k=>!COLMAP[k]);
+  if(missing.length){
+    showStatus('Upload failed — missing required column(s): '+missing.join(', ')+'. Check the source file headers and try again.', false);
+    return;
+  }
+  const idx = {}; for(const k in COLMAP) idx[k] = headers.indexOf(COLMAP[k]);
+  const out = [];
+  for(let i=1;i<rows.length;i++){
+    const r = rows[i]; if(!r) continue;
+    const date = parseDate(r[idx.date]); if(!date) continue;
+    out.push({
+      date, campaign: r[idx.campaign]||'—', moduleId: idx.moduleId>-1? String(r[idx.moduleId]??'—'):'—',
+      audience: r[idx.audience]||'—', creative: r[idx.creative]||'—',
+      platform: idx.platform>-1? (r[idx.platform]||'—'):null,
+      impressions: num(r[idx.impressions]), reach: num(r[idx.reach]),
+      spend: num(r[idx.spend]), clicks: num(r[idx.clicks]), leads: num(r[idx.leads]),
+      postEng: idx.postEng>-1? num(r[idx.postEng]):0
+    });
+  }
+  if(!out.length){ showStatus('No valid data rows found (check the date column).', false); return; }
+  RAW = out;
+  localStorage.setItem('orbis_data_v1', JSON.stringify(out.map(o=>({...o,date:o.date.toISOString()}))));
+  const hasPlatform = COLMAP.platform ? true : false;
+  document.getElementById('platformFieldWrap').style.display = hasPlatform? 'flex':'none';
+  let msg = fmtInt(out.length)+' records loaded.';
+  if(!hasPlatform) msg += ' Note: no Platform column found in this file — that filter is hidden.';
+  showStatus(msg, true);
+  ['btnRefresh','btnReset','btnDelete'].forEach(id=>document.getElementById(id).disabled=false);
+  populateFilters(true);
+  document.getElementById('filterBar').style.display='flex';
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('dashArea').style.display='block';
+  applyFilters();
+  updateFootNote();
+}
+
+function uniqueSorted(arr){ return [...new Set(arr.filter(v=>v!==null && v!==undefined && v!=='—'))].sort(); }
+
+function fillSelect(id, values, keepVal){
+  const sel = document.getElementById(id); const cur = keepVal? sel.value : '';
+  sel.innerHTML = '<option value="">All</option>' + values.map(v=>`<option value="${v}">${v}</option>`).join('');
+  if(cur && values.includes(cur)) sel.value = cur;
+}
+
+function populateFilters(reset){
+  const dates = RAW.map(r=>r.date);
+  if(reset){
+    const min = new Date(Math.min(...dates)), max = new Date(Math.max(...dates));
+    document.getElementById('fStart').value = min.toISOString().slice(0,10);
+    document.getElementById('fEnd').value = max.toISOString().slice(0,10);
+  }
+  const start = document.getElementById('fStart').value, end = document.getElementById('fEnd').value;
+  const scoped = RAW.filter(r=> (!start || r.date >= new Date(start)) && (!end || r.date <= new Date(end+'T23:59:59')));
+  const modSel = document.getElementById('fModule').value;
+  const campSel = document.getElementById('fCampaign').value;
+  let scoped2 = scoped.filter(r=> !modSel || r.moduleId===modSel);
+  fillSelect('fModule', uniqueSorted(scoped.map(r=>r.moduleId)), true);
+  fillSelect('fCampaign', uniqueSorted(scoped2.map(r=>r.campaign)), true);
+  let scoped3 = scoped2.filter(r=> !campSel || r.campaign===campSel);
+  fillSelect('fAudience', uniqueSorted(scoped3.map(r=>r.audience)), true);
+  fillSelect('fCreative', uniqueSorted(scoped3.map(r=>r.creative)), true);
+  if(COLMAP.platform) fillSelect('fPlatform', uniqueSorted(scoped3.map(r=>r.platform)), true);
+}
+
+function applyFilters(){
+  const start = document.getElementById('fStart').value, end = document.getElementById('fEnd').value;
+  const mod = document.getElementById('fModule').value, camp = document.getElementById('fCampaign').value;
+  const aud = document.getElementById('fAudience').value, cre = document.getElementById('fCreative').value;
+  const plat = COLMAP.platform ? document.getElementById('fPlatform').value : '';
+  FILTERED = RAW.filter(r=>
+    (!start || r.date >= new Date(start)) && (!end || r.date <= new Date(end+'T23:59:59')) &&
+    (!mod || r.moduleId===mod) && (!camp || r.campaign===camp) &&
+    (!aud || r.audience===aud) && (!cre || r.creative===cre) &&
+    (!plat || r.platform===plat)
+  );
+  populateFilters(false);
+  renderAll();
+}
+
+function clearFilters(){
+  populateFilters(true);
+  ['fModule','fCampaign','fAudience','fCreative'].forEach(id=>document.getElementById(id).value='');
+  if(COLMAP.platform) document.getElementById('fPlatform').value='';
+  applyFilters();
+}
+
+function resetDashboard(){ clearFilters(); }
+
+function deleteData(){
+  if(!confirm('Delete the uploaded dataset? This cannot be undone.')) return;
+  RAW=[]; FILTERED=[]; COLMAP={};
+  localStorage.removeItem('orbis_data_v1');
+  document.getElementById('filterBar').style.display='none';
+  document.getElementById('dashArea').style.display='none';
+  document.getElementById('emptyState').style.display='block';
+  ['btnRefresh','btnReset','btnDelete'].forEach(id=>document.getElementById(id).disabled=true);
+  document.getElementById('fileInput').value='';
+  showStatus('Dataset deleted.', true);
+  document.getElementById('footNote').textContent='';
+}
+
+function refreshData(){ applyFilters(); showStatus('Dashboard refreshed.', true); }
+
+function agg(rows){
+  const s = {impressions:0,reach:0,spend:0,clicks:0,leads:0,postEng:0};
+  rows.forEach(r=>{ s.impressions+=r.impressions; s.reach+=r.reach; s.spend+=r.spend; s.clicks+=r.clicks; s.leads+=r.leads; s.postEng+=r.postEng; });
+  return s;
+}
+
+const KPI_COLORS = ['#FFC145','#3FC1E9','#FF6B6B','#8CD867','#9B6BFF','#FF6FB5','#2EC4B6','#F4A259','#5A8FC7','#2ED9A3','#FF6B6B'];
+let kpiColorIdx = 0;
+function kpiCard(label, val, tip, trend){
+  const color = KPI_COLORS[kpiColorIdx++ % KPI_COLORS.length];
+  const trendHtml = trend!=null ? `<div class="trend ${trend>0?'up':trend<0?'down':''}">${trend>0?'▲':trend<0?'▼':'—'} ${Math.abs(trend).toFixed(1)}% vs prior period</div>` : '';
+  return `<div class="kpi" style="--kc:${color}"><div class="lbl">${label} <span class="q" title="${tip}">?</span></div><div class="val">${val}</div>${trendHtml}</div>`;
+}
+
+function priorPeriodRows(){
+  const start = document.getElementById('fStart').value, end = document.getElementById('fEnd').value;
+  if(!start||!end) return [];
+  const s = new Date(start), e = new Date(end); const span = e-s;
+  const ps = new Date(s.getTime()-span-86400000), pe = new Date(s.getTime()-86400000);
+  return RAW.filter(r=> r.date>=ps && r.date<=pe);
+}
+function pct(cur, prev){ return prev>0 ? ((cur-prev)/prev*100) : null; }
+
+function renderKPIs(){
+  kpiColorIdx = 0;
+  const s = agg(FILTERED);
+  const cpl = safeDiv(s.spend,s.leads), ctr = safeDiv(s.clicks,s.impressions)*100;
+  const cpm = safeDiv(s.spend,s.impressions)*1000, cpc = safeDiv(s.spend,s.clicks);
+  const freq = safeDiv(s.impressions,s.reach);
+  const prev = agg(priorPeriodRows());
+  const grid = document.getElementById('kpiGrid');
+  grid.innerHTML = [
+    kpiCard('Impressions', fmtInt(s.impressions), 'Total number of times ads were displayed.', pct(s.impressions,prev.impressions)),
+    kpiCard('Reach', fmtInt(s.reach), 'Number of unique people who saw the ads.', pct(s.reach,prev.reach)),
+    kpiCard('Amount Spent', fmtMoney(s.spend), 'Total media spend across selected filters.', pct(s.spend,prev.spend)),
+    kpiCard('Clicks (All)', fmtInt(s.clicks), 'Total clicks on ads, all types.', pct(s.clicks,prev.clicks)),
+    kpiCard('Platform Leads', fmtInt(s.leads), 'Leads generated on the ad platform.', pct(s.leads,prev.leads)),
+    kpiCard('Post Engagements', fmtInt(s.postEng), 'Likes, comments, shares and other interactions.', pct(s.postEng,prev.postEng)),
+    kpiCard('CPL', isFinite(cpl)?fmtMoney(cpl):'—', 'Cost per Lead = Amount Spent ÷ Platform Leads.'),
+    kpiCard('CTR', isFinite(ctr)?fmtNum(ctr,2)+'%':'—', 'Click-through rate = Clicks ÷ Impressions × 100.'),
+    kpiCard('CPM', isFinite(cpm)?fmtMoney(cpm):'—', 'Cost per 1,000 impressions.'),
+    kpiCard('CPC', isFinite(cpc)?fmtMoney(cpc):'—', 'Cost per Click = Amount Spent ÷ Clicks.'),
+    kpiCard('Frequency', isFinite(freq)?fmtNum(freq,2):'—', 'Average number of times each person saw the ad.')
+  ].join('');
+}
+
+function groupBy(rows, key){
+  const m = new Map();
+  rows.forEach(r=>{
+    let k = r[key];
+    if(k instanceof Date) k = k.toISOString().slice(0,10);
+    if(!m.has(k)) m.set(k,[]);
+    m.get(k).push(r);
+  });
+  return m;
+}
+function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
+const PALETTE = ['#FFC145','#3FC1E9','#FF6B6B','#8CD867','#9B6BFF','#FF6FB5','#2EC4B6','#F4A259'];
+
+function lineChart(id, labels, datasets){
+  destroyChart(id);
+  charts[id] = new Chart(document.getElementById(id), {
+    type:'line',
+    data:{labels, datasets: datasets.map((d,i)=>({...d, borderColor:PALETTE[i], backgroundColor:PALETTE[i]+'33', tension:.3, pointRadius:0, borderWidth:2}))},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{ticks:{color:'#8B93A3',maxTicksLimit:8},grid:{color:'#222A38'}}, y:{ticks:{color:'#8B93A3'},grid:{color:'#222A38'}}},
+      plugins:{legend:{labels:{color:'#ECEFF4'}}}}
+  });
+}
+function barChart(id, labels, data, horizontal){
+  destroyChart(id);
+  charts[id] = new Chart(document.getElementById(id), {
+    type:'bar',
+    data:{labels, datasets:[{data, backgroundColor:PALETTE[0], borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false, indexAxis: horizontal?'y':'x',
+      scales:{x:{ticks:{color:'#8B93A3'},grid:{color:'#222A38'}}, y:{ticks:{color:'#8B93A3'},grid:{color:'#222A38'}}},
+      plugins:{legend:{display:false}}}
+  });
+}
+function doughnutChart(id, labels, data){
+  destroyChart(id);
+  charts[id] = new Chart(document.getElementById(id), {
+    type:'doughnut',
+    data:{labels, datasets:[{data, backgroundColor:PALETTE, borderColor:'#151B2C', borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{color:'#ECEFF4',boxWidth:10,font:{size:10}}}}}
+  });
+}
+function scatterChart(id, points, labels){
+  destroyChart(id);
+  charts[id] = new Chart(document.getElementById(id), {
+    type:'scatter',
+    data:{datasets:[{data:points, backgroundColor:PALETTE[1]}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{title:{display:true,text:'CTR %',color:'#8B93A3'},ticks:{color:'#8B93A3'},grid:{color:'#222A38'}},
+              y:{title:{display:true,text:'CPC (₹)',color:'#8B93A3'},ticks:{color:'#8B93A3'},grid:{color:'#222A38'}}},
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=> labels[c.dataIndex]+': CTR '+c.parsed.x.toFixed(2)+'%, CPC ₹'+c.parsed.y.toFixed(2)}}}}
+  });
+}
+
+function renderOverview(){
+  const byDate = groupBy(FILTERED,'date');
+  const days = [...byDate.keys()].sort();
+  const spendSeries = days.map(d=>agg(byDate.get(d)).spend);
+  const leadSeries = days.map(d=>agg(byDate.get(d)).leads);
+  lineChart('chOverTime', days.map(d=>fmtDateLabel(d).replace(/, \d{4}$/,'')),
+    [{label:'Spend (₹)',data:spendSeries},{label:'Leads',data:leadSeries}]);
+
+  const byAud = groupBy(FILTERED,'audience');
+  const audEntries = [...byAud.entries()].map(([k,v])=>[k,agg(v).leads]).sort((a,b)=>b[1]-a[1]).slice(0,7);
+  doughnutChart('chAudience', audEntries.map(e=>e[0]), audEntries.map(e=>e[1]));
+
+  const byCamp = groupBy(FILTERED,'campaign');
+  const campEntries = [...byCamp.entries()].map(([k,v])=>[k,agg(v).spend]).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  barChart('chTopCampaigns', campEntries.map(e=>e[0].length>24?e[0].slice(0,24)+'…':e[0]), campEntries.map(e=>e[1]), true);
+
+  const byCre = groupBy(FILTERED,'creative');
+  const creEntries = [...byCre.entries()].map(([k,v])=>[k, safeDiv(agg(v).spend,agg(v).leads)]).filter(e=>isFinite(e[1])).sort((a,b)=>a[1]-b[1]).slice(0,6);
+  barChart('chCreative', creEntries.map(e=>e[0].length>18?e[0].slice(0,18)+'…':e[0]), creEntries.map(e=>+e[1].toFixed(1)), true);
+
+  const byMod = groupBy(FILTERED,'moduleId');
+  const modEntries = [...byMod.entries()].map(([k,v])=>[k, safeDiv(agg(v).spend,agg(v).leads)]).filter(e=>isFinite(e[1]));
+  barChart('chModule', modEntries.map(e=>e[0]), modEntries.map(e=>+e[1].toFixed(1)), false);
+}
+
+const groupSortState = {
+  audienceTable:{k:'spend',dir:-1}, creativeTable:{k:'spend',dir:-1}, datewiseTable:{k:'label',dir:1}
+};
+
+function renderGroupTable(tableId, groupKey, formatLabel){
+  const grouped = groupBy(FILTERED, groupKey);
+  let rows = [...grouped.entries()].map(([k,rs])=>{
+    const s = agg(rs);
+    return {label:k, sortLabel:k, impressions:s.impressions, reach:s.reach, clicks:s.clicks,
+      spend:s.spend, leads:s.leads, cpl:safeDiv(s.spend,s.leads), ctr:safeDiv(s.clicks,s.impressions)*100, cpm:safeDiv(s.spend,s.impressions)*1000};
+  });
+  const st = groupSortState[tableId];
+  const key = st.k==='label' ? 'sortLabel' : st.k;
+  rows.sort((a,b)=> (a[key]<b[key]?-1:1) * st.dir);
+  const tb = document.querySelector('#'+tableId+' tbody');
+  tb.innerHTML = rows.map(r=>`<tr>
+    <td>${formatLabel? formatLabel(r.label) : r.label}</td><td>${fmtInt(r.impressions)}</td>
+    <td>${fmtInt(r.reach)}</td><td>${fmtInt(r.clicks)}</td><td>${fmtMoney(r.spend)}</td>
+    <td>${fmtInt(r.leads)}</td><td>${isFinite(r.cpl)?fmtMoney(r.cpl):'—'}</td>
+    <td>${isFinite(r.ctr)?fmtNum(r.ctr,2):'—'}</td><td>${isFinite(r.cpm)?fmtMoney(r.cpm):'—'}</td></tr>`).join('') ||
+    '<tr><td colspan="9" style="text-align:center;color:var(--sub);">No rows match the current filters.</td></tr>';
+}
+
+function fmtDateLabel(d){ return new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); }
+
+function renderAll(){
+  renderKPIs(); renderOverview();
+  renderGroupTable('audienceTable','audience');
+  renderGroupTable('creativeTable','creative');
+  renderGroupTable('datewiseTable','date', fmtDateLabel);
+}
+
+function updateFootNote(){
+  const mapped = Object.keys(COLMAP).length;
+  document.getElementById('footNote').textContent =
+    `${RAW.length.toLocaleString('en-IN')} total records loaded · ${mapped} fields mapped from source columns · data stays in this browser only.`;
+}
+
+document.querySelectorAll('.tab').forEach(t=> t.addEventListener('click', ()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); document.getElementById('view-'+t.dataset.view).classList.add('active');
+}));
+const groupTableConfig = {
+  audienceTable:{key:'audience'}, creativeTable:{key:'creative'}, datewiseTable:{key:'date', fmt:fmtDateLabel}
+};
+document.querySelectorAll('#audienceTable th, #creativeTable th, #datewiseTable th').forEach(th=>{
+  const tableId = th.closest('table').id;
+  th.addEventListener('click', ()=>{
+    const k = th.dataset.k; const st = groupSortState[tableId];
+    st.dir = (st.k===k) ? -st.dir : (k==='label'?1:-1); st.k = k;
+    const cfg = groupTableConfig[tableId];
+    renderGroupTable(tableId, cfg.key, cfg.fmt);
+  });
+});
+document.getElementById('fileInput').addEventListener('change', e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); });
+
+(function init(){
+  try{
+    const saved = localStorage.getItem('orbis_data_v1');
+    if(saved){
+      const parsed = JSON.parse(saved).map(o=>({...o, date:new Date(o.date)}));
+      RAW = parsed;
+      COLMAP = {date:'Day',campaign:'Campaign name',moduleId:'Module ID',audience:'Audience',creative:'Creative',
+        platform: parsed.some(r=>r.platform!==null && r.platform!==undefined)?'Platform':null,
+        impressions:'Impressions',reach:'Reach',spend:'Amount spent (INR)',clicks:'Clicks (all)',leads:'Leads',postEng:'Post engagements'};
+      document.getElementById('platformFieldWrap').style.display = COLMAP.platform? 'flex':'none';
+      ['btnRefresh','btnReset','btnDelete'].forEach(id=>document.getElementById(id).disabled=false);
+      populateFilters(true);
+      document.getElementById('filterBar').style.display='flex';
+      document.getElementById('emptyState').style.display='none';
+      document.getElementById('dashArea').style.display='block';
+      applyFilters();
+      updateFootNote();
+      showStatus('Restored previously uploaded dataset ('+fmtInt(RAW.length)+' records).', true);
+    }
+  }catch(e){ /* ignore corrupt cache */ }
+})();
+</script>
+</body>
+</html>
